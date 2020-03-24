@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+    <style>* {padding: 0; margin: 0}</style>
+    <head>
+        <meta charset="utf-8">
+        <title>Hello World</title>
+        <script src="Ball.js"></script>
+        <script src="matter/matter.js"></script>
+        <script src="pixi/pixi.js"></script>
+        <script src="AnchorPoint.js"></script>
+        <script src="Rope.js"></script>
+        <script src="Nomnom.js"></script>
+    </head>
+    <body>
+        <script>
+            //check if pixi is running
+            let type = "WebGL"
+              if(!PIXI.utils.isWebGLSupported()){
+                type = "canvas"
+              }
+
+              PIXI.utils.sayHello(type)
+            
+            //setting aliases
+            const engine = Matter.Engine.create()
+            const World = Matter.World
+            const world = engine.world
+            const Bodies = Matter.Bodies
+            const Engine = Matter.Engine
+            const Composites = Matter.Composites
+            const Common = Matter.Common
+            const Constraint = Matter.Constraint
+            const MouseConstraint = Matter.MouseConstraint
+            const Mouse = Matter.Mouse
+            const Runner = Matter.Runner
+            const Body = Matter.Body;
+            
+            const Text = PIXI.Text;
+            
+            //Aliases pixi
+            let Application = PIXI.Application,
+                Container = PIXI.Container,
+                loader = PIXI.loader,
+                resources = PIXI.loader.resources,
+                TextureCache = PIXI.utils.TextureCache,
+                Sprite = PIXI.Sprite,
+                Rectangle = PIXI.Rectangle;
+                        
+            //Create a Pixi Application
+            let app = new PIXI.Application({ 
+                width: 256, 
+                height: 256,                       
+                antialiasing: true, 
+                transparent: false, 
+                resolution: 1
+              }
+            );
+            //Add the canvas that Pixi automatically created for you to the HTML document
+            document.body.appendChild(app.view);
+            
+            //style for the text, pretty neat
+            let style = new PIXI.TextStyle({
+              fontFamily: "Arial",
+              fontSize: 24,
+              fill: "white",
+              stroke: '#ff3300',
+              strokeThickness: 4,
+              dropShadow: true,
+              dropShadowColor: "#000000",
+              dropShadowBlur: 4,
+              dropShadowAngle: Math.PI / 6,
+              dropShadowDistance: 6,
+            });
+                    
+            //screensized canvas
+            app.renderer.view.style.position = "absolute";
+            app.renderer.view.style.display = "block";
+            app.renderer.autoResize = true;
+            app.renderer.resize(window.innerWidth, window.innerHeight);
+
+            //To change the background color
+            app.renderer.backgroundColor = 0x061639;
+            
+            //just a flooooooor so le cat sits nicely on the flooooor
+            //before everything loads because this will be true for all gamestates or if I let setup run again
+            //also a wall on the left, right and top
+            World.add(world, [
+                // walls
+                Bodies.rectangle(window.innerWidth / 2, window.innerHeight, window.innerWidth + 50, 50, { isStatic: true }), // floor
+                Bodies.rectangle(0, window.innerHeight / 2, 50, window.innerHeight + 50, { isStatic: true }), // left
+                Bodies.rectangle(window.innerWidth / 2, -10, window.innerWidth + 50, 50, { isStatic: true }), // top
+                Bodies.rectangle(window.innerWidth, window.innerHeight / 2, 50, window.innerHeight + 50, { isStatic: true }) // right
+            ]);
+                        
+            //load an image and run the `setup` function when it's done
+            PIXI.loader
+              .add("images/cat.png")
+              .add("images/sprite.png")
+              .load(setup);
+
+            //setting matter gravity to ...
+            world.gravity.y = 1;
+
+            //run the matter engine
+            Engine.run(engine);
+            
+            //global var
+            var constraintOn;
+            var defaultCategory = 0x0001; // col filter, not using this
+            var gameStateOn;
+            
+            //develop progress text?
+            let message = new Text("Work in progress \n drawn line for the constraint is not there \n win text not present \n click the cat to release the cat \n hit the human to win \n click the cat when it's on the ground to reset \n \n also no sound effects \n lots of magic numbers :/", style);
+            app.stage.addChild(message);
+            message.position.set(window.innerWidth / 2, 50);
+            
+            //This `setup` function will run when the image has loaded and loads pretty much everything, might make this neater and put this outside of the html file
+            function setup() {
+                gameStateOn = true;
+                                
+                //just incase
+                world.gravity.y = 1;
+                
+                //creates a ball
+                let ball = new Ball(25, 25, 5, app, 
+                                    {
+                                        isStatic: false,
+                                        frictionAir: 0
+                                        //frictionStatic: 0,
+                                        //inertia: Infinity,
+                                        //inversteInertia: Infinity,
+                                        //resistution: 1,
+                                        //friction: 0
+                                    });
+                
+                //creates anchorpoint
+                let anchorPoint = new AnchorPoint(125, 5, 10, app, {isStatic: true});
+                //creates player eat object
+                let nomNom = new Nomnom(125, window.innerHeight - 10, 5, app, {
+                                        isStatic: false,
+                                        friction: 0
+                                    });
+                
+                //creates the rope between
+                let rope = new Rope(250, 10, ball.body, app);
+                constraintOn = true;
+                
+                //only do this if the game is running
+                //debug purposes
+                if(gameStateOn){
+                console.log(ball);
+                console.log(anchorPoint);
+                console.log(rope);
+                console.log(nomNom)
+                }
+                
+                //update pixi
+                app.ticker.add( _ => {
+                
+                Engine.update(engine);
+                
+                //only render if something exists
+                if(ball)ball.render();
+                if(anchorPoint)anchorPoint.render();
+                if(nomNom)nomNom.render();
+                    
+                //gotta fix the freaking drawing line......
+                //rope.render(ball.body.position.x, ball.body.position.y);
+                
+                //basically keeps the ball dangling, with the use of fancy gravity.
+                //only do this when the constraint is there and the game is running.
+                if(constraintOn && gameStateOn)
+                {
+                if(ball.y >= 20)//height so the ball's force won't be increased or decreased
+                    {
+                        world.gravity.y = 0;
+                    }
+                if(ball.x >= 440)//length where the ball must have a force applied so the ball goes back down
+                    {
+                        world.gravity.y = 0.5;
+                    }
+                if(ball.x <= 60)//length where the ball must have a force applied so the ball goes back down
+                    {
+                        world.gravity.y = 0.5;
+                    }
+                }
+                
+                //click to release le ball
+                if(rope && ball)ball.mouseThing(rope, ball);
+                
+                if(gameStateOn)
+                    {
+                        if(hitTestRectangle(nomNom.graph, ball.graph))
+                        {
+                            //reset the game. reposition the ball? or perhaps reload the entire page? delete objects and make them again?
+                            console.log("Hit!");
+
+                            //next stage?
+                            //for now reset things
+                            Body.setPosition(ball.body, {x: 25, y: 25});
+                            Body.setVelocity(ball.body, {x: 0, y: 0});
+                            //creates the rope between, yet again
+                            rope.connect(250, 10, ball.body);
+                            //debug
+                            console.log(rope);
+                            //constraint is connected again
+                            constraintOn = true;
+                            //sets the nomnom object to a random spot on every hit
+                            Body.setPosition(nomNom.body, {x: Math.floor(Math.random() * window.innerWidth / 2), y: window.innerHeight - 10});
+                        }
+                    }
+                
+                }) // end ticker(update)
+            }
+            
+            //col function
+            function hitTestRectangle(r1, r2) {
+
+              //Define the variables we'll need to calculate
+              let hit, combinedHalfWidths, combinedHalfHeights, vx, vy;
+
+              //hit will determine whether there's a collision
+              hit = false;
+
+              //Find the center points of each sprite
+              r1.centerX = r1.x + r1.width / 2;
+              r1.centerY = r1.y + r1.height / 2;
+              r2.centerX = r2.x + r2.width / 2;
+              r2.centerY = r2.y + r2.height / 2;
+
+              //Find the half-widths and half-heights of each sprite
+              r1.halfWidth = r1.width / 2;
+              r1.halfHeight = r1.height / 2;
+              r2.halfWidth = r2.width / 2;
+              r2.halfHeight = r2.height / 2;
+
+              //Calculate the distance vector between the sprites
+              vx = r1.centerX - r2.centerX;
+              vy = r1.centerY - r2.centerY;
+
+              //Figure out the combined half-widths and half-heights
+              combinedHalfWidths = r1.halfWidth + r2.halfWidth;
+              combinedHalfHeights = r1.halfHeight + r2.halfHeight;
+
+              //Check for a collision on the x axis
+              if (Math.abs(vx) < combinedHalfWidths) {
+
+                //A collision might be occurring. Check for a collision on the y axis
+                if (Math.abs(vy) < combinedHalfHeights) {
+
+                  //There's definitely a collision happening
+                  hit = true;
+                } else {
+
+                  //There's no collision on the y axis
+                  hit = false;
+                }
+              } else {
+
+                //There's no collision on the x axis
+                hit = false;
+              }
+
+              //`hit` will be either `true` or `false`
+              return hit;
+            };
+        </script>
+    </body>
+</html>
